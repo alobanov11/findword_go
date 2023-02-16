@@ -45,29 +45,28 @@ func (a *App) Run() {
 		}
 
 		wg.Add(1)
-		go a.find(text, &total, wg, sem)
+
+		go func() {
+			defer func() {
+				<-sem
+				wg.Done()
+			}()
+
+			sem <- struct{}{}
+
+			parser := parser.New(a.word, text)
+			count, err := parser.Parse()
+
+			if err != nil {
+				fmt.Printf("error parse %s with %s\n", text, err)
+				return
+			}
+
+			atomic.AddInt64(&total, int64(count))
+			fmt.Printf("%d for %s\n", count, text)
+		}()
 	}
 
 	wg.Wait()
 	fmt.Printf("%d total\n", total)
-}
-
-func (a *App) find(text string, total *int64, wg *sync.WaitGroup, sem chan struct{}) {
-	defer func() {
-		<-sem
-		wg.Done()
-	}()
-
-	sem <- struct{}{}
-
-	parser := parser.New(a.word, text)
-	count, err := parser.Parse()
-
-	if err != nil {
-		fmt.Printf("error parse %s with %s\n", text, err)
-		return
-	}
-
-	atomic.AddInt64(total, int64(count))
-	fmt.Printf("%d for %s\n", count, text)
 }
